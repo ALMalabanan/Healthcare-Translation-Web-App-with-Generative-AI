@@ -254,6 +254,78 @@
             text-align: center;
         }
 
+        .compilation-section {
+            margin-top: 30px;
+            background: #fff;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .compilation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .compilation-header h3 {
+            color: #667eea;
+        }
+
+        .download-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .download-btn:hover {
+            background: #5a67d8;
+            transform: translateY(-1px);
+        }
+
+        .compilation-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .compilation-panel {
+            background: #f8f9ff;
+            border: 1px solid #e0e6ff;
+            border-radius: 10px;
+            padding: 15px;
+            min-height: 150px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .compilation-panel h4 {
+            color: #4a5568;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #e0e6ff;
+            padding-bottom: 5px;
+        }
+
+        .compilation-entry {
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px dashed #e0e6ff;
+        }
+
+        .timestamp {
+            font-size: 0.8rem;
+            color: #718096;
+            margin-bottom: 3px;
+        }
+
         @media (max-width: 768px) {
             .container {
                 padding: 15px;
@@ -281,6 +353,10 @@
                 order: 3;
                 justify-self: center;
             }
+
+            .compilation-content {
+                grid-template-columns: 1fr;
+            }
         }
 
         .error-message {
@@ -298,6 +374,7 @@
             font-style: italic;
         }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -363,6 +440,25 @@
             <div class="privacy-notice">
                 🔒 Privacy Protected: All processing happens in your browser. No data is stored or transmitted to external servers.
             </div>
+
+            <div class="compilation-section">
+                <div class="compilation-header">
+                    <h3>Session Compilation</h3>
+                    <button class="download-btn" id="downloadPdf">
+                        📄 Download PDF
+                    </button>
+                </div>
+                <div class="compilation-content">
+                    <div class="compilation-panel">
+                        <h4>Original Transcript History</h4>
+                        <div id="compiledOriginal"></div>
+                    </div>
+                    <div class="compilation-panel">
+                        <h4>Translation History</h4>
+                        <div id="compiledTranslation"></div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -374,6 +470,7 @@
                 this.originalText = '';
                 this.translatedText = '';
                 this.detectedMedicalTerms = new Set();
+                this.compiledEntries = [];
                 
                 // Medical dictionary for enhanced recognition
                 this.medicalTerms = [
@@ -409,7 +506,12 @@
                     clearBtn: document.getElementById('clearBtn'),
                     errorMessage: document.getElementById('errorMessage'),
                     medicalTerms: document.getElementById('medicalTerms'),
-                    termsList: document.getElementById('termsList')
+                    termsList: document.getElementById('termsList'),
+                    compilationSection: document.querySelector('.compilation-section'),
+                    compilationContent: document.getElementById('compilationContent'),
+                    downloadPdf: document.getElementById('downloadPdf'),
+                    compiledOriginal: document.getElementById('compiledOriginal'),
+                    compiledTranslation: document.getElementById('compiledTranslation')
                 };
             }
 
@@ -419,6 +521,7 @@
                 this.elements.speakOriginal.addEventListener('click', () => this.speakText(this.originalText, this.getInputLangCode()));
                 this.elements.speakTranslation.addEventListener('click', () => this.speakText(this.translatedText, this.elements.outputLang.value));
                 this.elements.clearBtn.addEventListener('click', () => this.clearTranscripts());
+                document.getElementById('downloadPdf').addEventListener('click', () => this.generatePDF());
             }
 
             checkBrowserSupport() {
@@ -570,6 +673,9 @@
                     this.elements.translatedText.textContent = this.translatedText + ' (Demo Translation)';
                     this.elements.speakTranslation.disabled = false;
                 }
+
+                // Add this after setting this.translatedText in the translateText method
+                this.addCompilationEntry(text, this.translatedText);
             }
 
             getFallbackTranslation(text) {
@@ -679,6 +785,11 @@
                 this.detectedMedicalTerms.clear();
                 this.elements.medicalTerms.style.display = 'none';
                 this.elements.status.textContent = 'Click the microphone to start recording';
+
+                // Add this to the clearTranscripts method
+                this.compiledEntries = [];
+                document.getElementById('compiledOriginal').innerHTML = '';
+                document.getElementById('compiledTranslation').innerHTML = '';
             }
 
             showError(message) {
@@ -688,6 +799,73 @@
 
             hideError() {
                 this.elements.errorMessage.style.display = 'none';
+            }
+
+            addCompilationEntry(original, translation) {
+                const timestamp = new Date().toLocaleTimeString();
+                const entry = { timestamp, original, translation };
+                this.compiledEntries.push(entry);
+                this.updateCompilation();
+            }
+
+            updateCompilation() {
+                const compiledOriginal = document.getElementById('compiledOriginal');
+                const compiledTranslation = document.getElementById('compiledTranslation');
+                
+                compiledOriginal.innerHTML = this.compiledEntries.map(entry => `
+                    <div class="compilation-entry">
+                        <div class="timestamp">${entry.timestamp}</div>
+                        <div>${entry.original}</div>
+                    </div>
+                `).join('');
+                
+                compiledTranslation.innerHTML = this.compiledEntries.map(entry => `
+                    <div class="compilation-entry">
+                        <div class="timestamp">${entry.timestamp}</div>
+                        <div>${entry.translation}</div>
+                    </div>
+                `).join('');
+            }
+
+            async generatePDF() {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                doc.setFontSize(16);
+                doc.text('MediTranslate Session Report', 20, 20);
+                
+                doc.setFontSize(12);
+                const date = new Date().toLocaleString();
+                doc.text(`Generated on: ${date}`, 20, 30);
+                
+                doc.setFontSize(10);
+                let yPos = 50;
+                
+                this.compiledEntries.forEach((entry, index) => {
+                    if (yPos > 270) {
+                        doc.addPage();
+                        yPos = 20;
+                    }
+                    
+                    doc.setFont(undefined, 'bold');
+                    doc.text(`Entry ${index + 1} - ${entry.timestamp}`, 20, yPos);
+                    yPos += 10;
+                    
+                    doc.setFont(undefined, 'normal');
+                    doc.text('Original:', 20, yPos);
+                    yPos += 7;
+                    const originalLines = doc.splitTextToSize(entry.original, 170);
+                    doc.text(originalLines, 20, yPos);
+                    yPos += (originalLines.length * 7);
+                    
+                    doc.text('Translation:', 20, yPos);
+                    yPos += 7;
+                    const translationLines = doc.splitTextToSize(entry.translation, 170);
+                    doc.text(translationLines, 20, yPos);
+                    yPos += (translationLines.length * 7) + 10;
+                });
+                
+                doc.save('MediTranslate-Session.pdf');
             }
         }
 
