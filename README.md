@@ -1,3 +1,4 @@
+
 # MediTranslate - Healthcare Translation Web App
 ## Technical Documentation & User Guide
 
